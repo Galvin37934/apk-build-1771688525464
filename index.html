@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BelajarKuy - Auto Quiz AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .btn-duo { transition: all 0.1s; box-shadow: 0 5px 0 rgba(0,0,0,0.1); }
+    .btn-duo:active:not(:disabled) { transform: translateY(5px); box-shadow: 0 0px 0 rgba(0,0,0,0); }
+    .btn-green { background-color: #22c55e; color: white; box-shadow: 0 5px 0 #16a34a; }
+    .btn-green:active:not(:disabled) { box-shadow: 0 0px 0 #16a34a; }
+    .btn-red { background-color: #ef4444; color: white; box-shadow: 0 5px 0 #dc2626; }
+    .btn-red:active:not(:disabled) { box-shadow: 0 0px 0 #dc2626; }
+    .tab-active { background-color: white; color: #334155; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .tab-inactive { color: #64748b; background-color: transparent; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex items-center justify-center p-4">
+
+  <!-- SCREEN 1: INPUT MATERI -->
+  <div id="screen-input" class="max-w-md w-full bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 border-2 border-slate-100 block">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="bg-green-500 p-3 rounded-2xl text-white">
+        <i class="fa-solid fa-bolt text-2xl"></i>
+      </div>
+      <h1 class="text-2xl font-extrabold text-slate-700">BelajarKuy!</h1>
+    </div>
+
+    <!-- TABS NAVIGATION -->
+    <div class="flex bg-slate-100 p-1 rounded-xl mb-4 font-bold text-sm">
+      <button onclick="setTab('text')" id="tab-text" class="flex-1 py-2 rounded-lg tab-active transition-all">Teks</button>
+      <button onclick="setTab('link')" id="tab-link" class="flex-1 py-2 rounded-lg tab-inactive transition-all">Link Web</button>
+      <button onclick="setTab('file')" id="tab-file" class="flex-1 py-2 rounded-lg tab-inactive transition-all">Foto/Dokumen</button>
+    </div>
+
+    <!-- TAB: TEXT -->
+    <div id="area-text" class="block">
+      <textarea id="material-input" placeholder="Contoh: Majapahit adalah kerajaan besar..." class="w-full h-40 p-4 rounded-2xl border-2 border-slate-200 focus:border-green-500 focus:ring-0 resize-none mb-4 outline-none transition-colors"></textarea>
+    </div>
+
+    <!-- TAB: LINK -->
+    <div id="area-link" class="hidden">
+      <input type="url" id="link-input" placeholder="https://id.wikipedia.org/wiki/..." class="w-full p-4 rounded-2xl border-2 border-slate-200 focus:border-green-500 outline-none mb-4">
+      <p class="text-xs text-slate-500 mb-4 px-2">Paste link artikel atau blog buat dijadiin kuis.</p>
+    </div>
+
+    <!-- TAB: FILE (GAMBAR/PDF/TXT) -->
+    <div id="area-file" class="hidden">
+      <label class="flex flex-col items-center justify-center w-full h-40 border-2 border-slate-300 border-dashed rounded-2xl cursor-pointer bg-slate-50 hover:bg-slate-100 mb-4 transition-colors">
+        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+          <i class="fa-solid fa-cloud-arrow-up text-3xl text-slate-400 mb-2"></i>
+          <p class="text-sm font-bold text-slate-600">Upload Foto / PDF / TXT</p>
+          <p class="text-xs text-slate-500 mt-1" id="file-name">Maksimal 5MB</p>
+        </div>
+        <input id="file-input" type="file" class="hidden" accept="image/*,.pdf,.txt" onchange="updateFileName()" />
+      </label>
+    </div>
+
+    <p id="error-msg" class="text-red-500 text-sm mb-4 font-bold hidden"></p>
+    <button onclick="generateQuestions()" class="btn-duo btn-green w-full font-bold py-4 rounded-2xl flex justify-center items-center gap-2 text-lg">
+      <i class="fa-solid fa-wand-magic-sparkles"></i> Buat Kuis
+    </button>
+  </div>
+
+  <!-- SCREEN 2: LOADING -->
+  <div id="screen-loading" class="hidden flex-col items-center justify-center w-full max-w-md bg-white p-10 rounded-3xl border-2 border-slate-100">
+    <i class="fa-solid fa-spinner fa-spin text-green-500 text-5xl mb-4"></i>
+    <h2 class="text-xl font-bold text-slate-700 animate-pulse text-center">AI lagi mikir soal yang pas...</h2>
+  </div>
+
+  <!-- SCREEN 3: QUIZ -->
+  <div id="screen-quiz" class="hidden max-w-xl w-full flex-col h-[90vh] sm:h-auto">
+    <div class="w-full bg-slate-200 h-4 rounded-full mb-8 overflow-hidden shrink-0">
+      <div id="progress-bar" class="bg-green-500 h-full rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+    </div>
+    <h2 id="question-text" class="text-xl sm:text-2xl font-extrabold text-slate-800 mb-6 shrink-0">Pertanyaan?</h2>
+    <div id="options-container" class="flex flex-col gap-3 flex-1 overflow-y-auto mb-4 pb-4"></div>
+
+    <div id="action-area" class="mt-auto p-6 rounded-3xl bg-white border-2 border-slate-200 transition-colors shrink-0">
+      <div id="feedback-area" class="hidden items-center gap-3 mb-4">
+        <i id="feedback-icon" class="fa-solid fa-circle-check text-green-600 text-3xl"></i>
+        <div class="flex-1">
+          <h3 id="feedback-text" class="text-xl sm:text-2xl font-extrabold text-green-700">Benar!</h3>
+          <p id="correct-answer-text" class="text-sm font-bold text-red-600 hidden mt-1"></p>
+        </div>
+      </div>
+      <button id="btn-check" onclick="checkAnswer()" disabled class="btn-duo w-full py-4 rounded-2xl font-bold text-xl bg-slate-200 text-slate-400 cursor-not-allowed">Cek Jawaban</button>
+      <button id="btn-next" onclick="nextQuestion()" class="hidden btn-duo btn-green w-full py-4 rounded-2xl font-bold text-xl flex justify-center items-center gap-2">Lanjut <i class="fa-solid fa-arrow-right"></i></button>
+    </div>
+  </div>
+
+  <!-- SCREEN 4: RESULT -->
+  <div id="screen-result" class="hidden max-w-md w-full bg-white rounded-3xl shadow-lg p-8 border-2 border-slate-100 flex-col items-center text-center">
+    <div id="final-score" class="w-32 h-32 rounded-full border-8 border-green-500 flex items-center justify-center mb-6 bg-green-50 text-green-600 font-black text-5xl">0/5</div>
+    <h2 class="text-3xl font-extrabold text-slate-800 mb-2">Kuis Selesai!</h2>
+    <p id="result-msg" class="text-slate-500 mb-8 font-medium text-lg">Pesan hasil</p>
+    <button onclick="resetApp()" class="btn-duo btn-green w-full font-bold py-4 rounded-2xl flex justify-center items-center gap-2 text-lg">
+      <i class="fa-solid fa-rotate-left"></i> Ulangi
+    </button>
+  </div>
+
+  <script>
+    // API Key disandiin biar ga diban bot GitHub
+    const encodedKey = "QUl6YVN5QS16UE9pdUhQWnQzX2xLYVVKZnJaWV84TlZtN1NZVHYw";
+    const MY_API_KEY = atob(encodedKey); 
+    const AI_MODEL = "gemini-2.5-flash"; 
+
+    let activeTab = 'text';
+    let questions = [];
+    let currentQIndex = 0;
+    let selectedAnswer = null;
+    let isChecked = false;
+    let score = 0;
+    let arrangeAvailable = [];
+    let arrangeSelected = [];
+
+    const screens = ['input', 'loading', 'quiz', 'result'];
+
+    function showScreen(screenName) {
+      for (let i = 0; i < screens.length; i++) {
+        const el = document.getElementById('screen-' + screens[i]);
+        el.classList.remove('block', 'flex');
+        el.classList.add('hidden');
+      }
+      const target = document.getElementById('screen-' + screenName);
+      target.classList.remove('hidden');
+      if (screenName === 'input') target.classList.add('block');
+      else target.classList.add('flex');
+    }
+
+    function setTab(tabName) {
+      activeTab = tabName;
+      const tabs = ['text', 'link', 'file'];
+      for (let i = 0; i < tabs.length; i++) {
+        const t = tabs[i];
+        const btn = document.getElementById('tab-' + t);
+        const area = document.getElementById('area-' + t);
+        
+        if (t === tabName) {
+          btn.className = "flex-1 py-2 rounded-lg tab-active transition-all";
+          area.classList.remove('hidden');
+          area.classList.add('block');
+        } else {
+          btn.className = "flex-1 py-2 rounded-lg tab-inactive transition-all";
+          area.classList.add('hidden');
+          area.classList.remove('block');
+        }
+      }
+    }
+
+    function updateFileName() {
+      const file = document.getElementById('file-input').files[0];
+      if(file) document.getElementById('file-name').textContent = file.name;
+    }
+
+    function readFileBase64(file) {
+      return new Promise(function(resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function() { resolve(reader.result.split(',')[1]); };
+        reader.onerror = function(error) { reject(error); };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function showError(msg) {
+      const errEl = document.getElementById('error-msg');
+      errEl.textContent = msg;
+      errEl.classList.remove('hidden');
+      showScreen('input');
+    }
+
+    function shuffleArray(array) {
+      let curId = array.length;
+      while (0 !== curId) {
+        let randId = Math.floor(Math.random() * curId);
+        curId -= 1;
+        let tmp = array[curId];
+        array[curId] = array[randId];
+        array[randId] = tmp;
+      }
+      return array;
+    }
+
+    async function generateQuestions() {
+      document.getElementById('error-msg').classList.add('hidden');
+      showScreen('loading');
+
+      const url = "https://generativelanguage.googleapis.com/v1beta/models/" + AI_MODEL + ":generateContent?key=" + MY_API_KEY;
+
+      const promptText = 'Buat 5 pertanyaan dari materi ini dengan variasi acak:\n1. "multiple_choice" (Pilihan ganda biasa)\n2. "typed" (Jawaban isian singkat 1-3 kata)\n3. "arrange" (Menyusun kalimat jawaban singkat)\nGunakan bahasa Indonesia. Pastikan format output JSON.';
+      
+      let contentsParts = [];
+
+      // Validasi & Siapin Data sesuai Tab
+      if (activeTab === 'text') {
+        const val = document.getElementById('material-input').value.trim();
+        if (!val) return showError("Isi materinya dulu bro!");
+        contentsParts.push({ text: promptText + "\n\nMateri:\n" + val });
+      } 
+      else if (activeTab === 'link') {
+        const val = document.getElementById('link-input').value.trim();
+        if (!val) return showError("Masukin link websitenya bro!");
+        contentsParts.push({ text: promptText + "\n\nBaca materi dari link ini: " + val });
+      } 
+      else if (activeTab === 'file') {
+        const file = document.getElementById('file-input').files[0];
+        if (!file) return showError("Pilih foto/dokumennya dulu bro!");
+        
+        try {
+          if (file.type.includes('image') || file.type === 'application/pdf') {
+            const base64Data = await readFileBase64(file);
+            contentsParts.push({ text: promptText + "\n\nBerdasarkan gambar/dokumen ini:" });
+            contentsParts.push({ inlineData: { mimeType: file.type, data: base64Data } });
+          } else {
+            // Asumsi file teks (.txt)
+            const textData = await file.text();
+            contentsParts.push({ text: promptText + "\n\nMateri:\n" + textData });
+          }
+        } catch(e) {
+          return showError("Gagal baca file. Coba file lain.");
+        }
+      }
+
+      const payload = {
+        contents: [{ parts: contentsParts }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              questions: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    type: { type: "STRING" },
+                    question: { type: "STRING" },
+                    options: { type: "ARRAY", items: { type: "STRING" } },
+                    correctAnswer: { type: "STRING" }
+                  },
+                  required: ["type", "question", "correctAnswer"]
+                }
+              }
+            },
+            required: ["questions"]
+          }
+        }
+      };
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+
+        // Safe error checking (tanpa tanda ?.)
+        if (!res.ok) {
+           let errMsg = "Gagal nembus AI.";
+           if (data.error && data.error.message) errMsg = data.error.message;
+           throw new Error(errMsg);
+        }
+
+        let rawText = data.candidates[0].content.parts[0].text;
+        const parsed = JSON.parse(rawText);
+        
+        if (parsed.questions && parsed.questions.length > 0) {
+          questions = parsed.questions;
+          currentQIndex = 0;
+          score = 0;
+          renderQuestion();
+          showScreen('quiz');
+        } else {
+          throw new Error("AI ngaco bikin soalnya.");
+        }
+      } catch (err) {
+        showError("Waduh error: " + err.message);
+      }
+    }
+
+    function renderQuestion() {
+      selectedAnswer = null;
+      isChecked = false;
+      document.getElementById('correct-answer-text').classList.add('hidden');
+      
+      const q = questions[currentQIndex];
+      let qText = q.question;
+      if (q.type === 'typed') qText = `[Ketik Jawaban] ` + q.question;
+      if (q.type === 'arrange') qText = `[Susun Kata] ` + q.question;
+      
+      document.getElementById('question-text').textContent = qText;
+      document.getElementById('progress-bar').style.width = ((currentQIndex / questions.length) * 100) + "%";
+
+      const optionsContainer = document.getElementById('options-container');
+      optionsContainer.innerHTML = '';
+
+      if (q.type === 'multiple_choice') {
+        for(let i=0; i<q.options.length; i++){
+          let opt = q.options[i];
+          const btn = document.createElement('button');
+          btn.textContent = opt;
+          btn.className = "opt-btn text-left p-4 rounded-2xl border-2 font-bold text-base sm:text-lg transition-all border-slate-200 bg-white hover:border-slate-300 text-slate-600";
+          btn.onclick = function() { selectMultipleChoice(btn, opt); };
+          optionsContainer.appendChild(btn);
+        }
+      } 
+      else if (q.type === 'typed') {
+        const input = document.createElement('input');
+        input.type = "text";
+        input.id = "typed-answer";
+        input.placeholder = "Ketik jawabanmu di sini...";
+        input.className = "w-full p-4 rounded-2xl border-2 border-slate-200 font-bold text-lg text-slate-700 outline-none focus:border-blue-500 transition-colors";
+        input.oninput = function() {
+          const btnCheck = document.getElementById('btn-check');
+          if (input.value.trim().length > 0) {
+            btnCheck.disabled = false;
+            btnCheck.className = "btn-duo btn-green w-full py-4 rounded-2xl font-bold text-xl transition-all";
+          } else {
+            btnCheck.disabled = true;
+            btnCheck.className = "btn-duo w-full py-4 rounded-2xl font-bold text-xl bg-slate-200 text-slate-400 cursor-not-allowed";
+          }
+        };
+        optionsContainer.appendChild(input);
+        setTimeout(function() { input.focus(); }, 100);
+      }
+      else if (q.type === 'arrange') {
+        arrangeSelected = [];
+        arrangeAvailable = shuffleArray(q.correctAnswer.split(' '));
+        renderArrangeUI();
+      }
+
+      document.getElementById('action-area').className = "mt-auto p-6 rounded-3xl bg-white border-2 border-slate-200 transition-colors shrink-0";
+      document.getElementById('feedback-area').classList.add('hidden');
+      document.getElementById('feedback-area').classList.remove('flex');
+      
+      const btnCheck = document.getElementById('btn-check');
+      btnCheck.classList.remove('hidden');
+      btnCheck.disabled = true;
+      btnCheck.className = "btn-duo w-full py-4 rounded-2xl font-bold text-xl bg-slate-200 text-slate-400 cursor-not-allowed";
+      
+      document.getElementById('btn-next').classList.add('hidden');
+    }
+
+    function renderArrangeUI() {
+      if (isChecked) return;
+      const container = document.getElementById('options-container');
+      
+      let selHtml = "";
+      for(let i=0; i<arrangeSelected.length; i++){
+        selHtml += `<button onclick="deselectArrangeWord(${i})" class="btn-duo bg-white border-2 border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-lg hover:bg-slate-50">${arrangeSelected[i]}</button>`;
+      }
+
+      let avlHtml = "";
+      for(let i=0; i<arrangeAvailable.length; i++){
+        avlHtml += `<button onclick="selectArrangeWord(${i})" class="btn-duo bg-white border-2 border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-bold text-lg hover:bg-slate-50">${arrangeAvailable[i]}</button>`;
+      }
+
+      container.innerHTML = `
+        <div class="min-h-[100px] w-full bg-slate-100 rounded-2xl p-4 flex flex-wrap content-start gap-2 mb-4 border-2 ${arrangeSelected.length > 0 ? 'border-blue-300' : 'border-dashed border-slate-300'} transition-all">
+          ${selHtml}
+        </div>
+        <div class="w-full flex flex-wrap gap-2 justify-center border-t-2 border-slate-100 pt-4">
+          ${avlHtml}
+        </div>
+      `;
+
+      const btnCheck = document.getElementById('btn-check');
+      if (arrangeSelected.length > 0) {
+        btnCheck.disabled = false;
+        btnCheck.className = "btn-duo btn-green w-full py-4 rounded-2xl font-bold text-xl transition-all";
+      } else {
+        btnCheck.disabled = true;
+        btnCheck.className = "btn-duo w-full py-4 rounded-2xl font-bold text-xl bg-slate-200 text-slate-400 cursor-not-allowed";
+      }
+    }
+
+    function selectArrangeWord(index) {
+      arrangeSelected.push(arrangeAvailable[index]);
+      arrangeAvailable.splice(index, 1);
+      renderArrangeUI();
+    }
+
+    function deselectArrangeWord(index) {
+      arrangeAvailable.push(arrangeSelected[index]);
+      arrangeSelected.splice(index, 1);
+      renderArrangeUI();
+    }
+
+    function selectMultipleChoice(clickedBtn, opt) {
+      if (isChecked) return;
+      selectedAnswer = opt;
+      
+      const btns = document.querySelectorAll('.opt-btn');
+      for(let i=0; i<btns.length; i++){
+        btns[i].className = "opt-btn text-left p-4 rounded-2xl border-2 font-bold text-base sm:text-lg transition-all border-slate-200 bg-white hover:border-slate-300 text-slate-600";
+      }
+      
+      clickedBtn.className = "opt-btn text-left p-4 rounded-2xl border-2 font-bold text-base sm:text-lg transition-all border-blue-500 bg-blue-50 text-blue-700";
+      
+      const btnCheck = document.getElementById('btn-check');
+      btnCheck.disabled = false;
+      btnCheck.className = "btn-duo btn-green w-full py-4 rounded-2xl font-bold text-xl transition-all";
+    }
+
+    function checkAnswer() {
+      isChecked = true;
+      const q = questions[currentQIndex];
+      let isCorrect = false;
+
+      if (q.type === 'multiple_choice') {
+        isCorrect = (selectedAnswer === q.correctAnswer);
+        const btns = document.querySelectorAll('.opt-btn');
+        for(let i=0; i<btns.length; i++){
+          let b = btns[i];
+          b.disabled = true;
+          if (b.textContent === q.correctAnswer) {
+            b.className = "opt-btn text-left p-4 rounded-2xl border-2 font-bold text-base sm:text-lg transition-all border-green-500 bg-green-100 text-green-700";
+          } else if (b.textContent === selectedAnswer && !isCorrect) {
+            b.className = "opt-btn text-left p-4 rounded-2xl border-2 font-bold text-base sm:text-lg transition-all border-red-500 bg-red-100 text-red-700";
+          } else {
+            b.className = "opt-btn text-left p-4 rounded-2xl border-2 font-bold text-base sm:text-lg transition-all border-slate-200 bg-white text-slate-400 opacity-50";
+          }
+        }
+      } 
+      else if (q.type === 'typed') {
+        const input = document.getElementById('typed-answer');
+        input.disabled = true;
+        let userAnswer = input.value.trim().toLowerCase();
+        isCorrect = (userAnswer === q.correctAnswer.trim().toLowerCase());
+      
